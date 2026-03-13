@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Messenger</title>
+    <style>
+        :root { --wa-green: #00a884; --wa-bg: #f0f2f5; --mine: #dcf8c6; --theirs: #ffffff; --blue-tick: #34b7f1; --wa-dark: #111b21; }
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', sans-serif; }
+        body { background-color: #dadbd3; height: 100vh; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+        
+        /* Auth */
+        #auth { position: fixed; inset: 0; background: var(--wa-green); display: flex; align-items: center; justify-content: center; z-index: 1000; }
+        .auth-card { background: white; padding: 40px; border-radius: 15px; text-align: center; width: 350px; box-shadow: 0 10px 25px rgba(0,0,0,0.2); }
+        .auth-card input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ddd; border-radius: 8px; outline: none; }
+        .btn-main { width: 100%; padding: 12px; background: var(--wa-green); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold; }
+
+        /* App Layout */
+        #app { width: 100%; max-width: 1600px; height: 95vh; background: white; display: none; border-radius: 3px; overflow: hidden; }
+        #sidebar { width: 380px; border-right: 1px solid #ddd; display: flex; flex-direction: column; background: #fff; }
+        .side-header { background: #ededed; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+        .avatar { width: 40px; height: 40px; background: #00a884; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; color: white; overflow: hidden; cursor: pointer; flex-shrink: 0; }
+        .avatar img { width: 100%; height: 100%; object-fit: cover; }
+        
+        .contact-list { flex: 1; overflow-y: auto; }
+        .contact { padding: 12px 16px; border-bottom: 1px solid #f2f2f2; cursor: pointer; display: flex; align-items: center; gap: 15px; }
+        .contact.active { background: #ebebeb; }
+
+        #chat-window { flex: 1; display: none; flex-direction: column; background: #e5ddd5 url('https://user-images.githubusercontent.com/15075759/28719144-86dc0f70-73b1-11e7-911d-60d70fcded21.png'); }
+        .chat-header { background: #ededed; padding: 10px 16px; display: flex; align-items: center; gap: 15px; border-bottom: 1px solid #ddd; }
+        #messages { flex: 1; padding: 20px 40px; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+        
+        .bubble { padding: 6px 10px; border-radius: 8px; max-width: 65%; font-size: 14.5px; box-shadow: 0 1px 1px rgba(0,0,0,0.1); position: relative; display: flex; flex-direction: column; cursor: context-menu; transition: opacity 0.2s ease, transform 0.2s ease; }
+        .mine { align-self: flex-end; background: var(--mine); }
+        .theirs { align-self: flex-start; background: var(--theirs); }
+        .bubble img, .bubble video { max-width: 280px; border-radius: 5px; cursor: pointer; margin-top: 5px; }
+        
+        .input-area { background: #f0f2f5; padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+        .input-area input[type="text"] { flex: 1; padding: 12px; border: none; border-radius: 25px; outline: none; }
+
+        /* Context Menu */
+        .msg-menu { position: fixed; background: white; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.2); display: none; z-index: 7000; flex-direction: column; overflow: hidden; min-width: 150px; }
+        .msg-menu button { padding: 12px 16px; border: none; background: none; cursor: pointer; text-align: left; font-size: 14px; }
+        .msg-menu button:hover { background: #f5f5f5; }
+
+        /* Lightbox & Call */
+        #lightbox { position: fixed; inset: 0; background: rgba(0,0,0,0.9); display: none; align-items: center; justify-content: center; z-index: 3000; }
+        #lb-inner { position: relative; max-width: 90%; max-height: 85%; display: flex; flex-direction: column; }
+        #lb-inner img, #lb-inner video { width: 100%; height: auto; border-radius: 8px; }
+        .close-lb { align-self: flex-end; color: white; font-size: 35px; cursor: pointer; padding: 10px; }
+
+        #call-overlay { position: fixed; inset: 0; background: var(--wa-dark); color: white; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 4000; }
+        #remote-video { width: 100%; height: 100%; object-fit: cover; }
+        #local-video { width: 120px; height: 160px; position: absolute; bottom: 100px; right: 20px; border: 2px solid white; border-radius: 8px; z-index: 4001; }
+        
+        /* Custom UI Popups */
+        #custom-popup { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; align-items: center; justify-content: center; z-index: 5000; }
+        .popup-card { background: white; padding: 25px; border-radius: 12px; width: 320px; text-align: center; box-shadow: 0 15px 30px rgba(0,0,0,0.3); }
+        .popup-btns { display: flex; gap: 10px; justify-content: center; margin-top: 20px; }
+        .btn-sec { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; background: #eee; font-weight: bold; }
+
+        #toast { position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%); background: #323232; color: white; padding: 12px 24px; border-radius: 25px; font-size: 14px; display: none; z-index: 6000; }
+        
+        .record-btn { background: none; border: none; font-size: 22px; cursor: pointer; color: #54656f; }
+        .recording { color: #ea4335; transform: scale(1.2); }
+        .ticks { font-size: 11px; color: #888; align-self: flex-end; }
+        .read { color: var(--blue-tick); }
+        .dl-link { font-size: 12px; color: var(--wa-green); cursor: pointer; margin-top: 5px; font-weight: bold; text-decoration: none; }
+    </style>
+</head>
+<body onclick="hideMenu()">
+
+<div id="auth">
+    <div class="auth-card">
+        <h2 style="color:var(--wa-green); margin-bottom: 20px;">Messenger</h2>
+        <input type="text" id="u" placeholder="Benutzername">
+        <input type="password" id="p" placeholder="Passwort">
+        <button class="btn-main" onclick="auth('login')">Einloggen</button><br><br>
+        <button class="btn-main" style="background:#34b7f1" onclick="auth('register')">Neu Registrieren</button>
+    </div>
+</div>
+
+<div id="msg-menu" class="msg-menu">
+    <button onclick="editMsgAction()">✏️ Bearbeiten</button>
+    <button onclick="deleteMsgAction()" style="color:red">🗑️ Löschen</button>
+</div>
+
+<div id="custom-popup">
+    <div class="popup-card">
+        <h3 id="pop-title">Titel</h3><br>
+        <p id="pop-text">Beschreibung...</p>
+        <div class="popup-btns">
+            <button class="btn-sec" onclick="closePop()">Abbrechen</button>
+            <button class="btn-main" id="pop-confirm" style="width:auto">Bestätigen</button>
+        </div>
+    </div>
+</div>
+
+<div id="toast"></div>
+
+<div id="lightbox" onclick="this.style.display='none'">
+    <div id="lb-inner" onclick="event.stopPropagation()">
+        <span class="close-lb" onclick="document.getElementById('lightbox').style.display='none'">&times;</span>
+        <div id="lb-content"></div>
+    </div>
+</div>
+
+<div id="call-overlay">
+    <video id="remote-video" autoplay playsinline></video>
+    <video id="local-video" autoplay playsinline muted></video>
+    <div style="position: absolute; bottom: 50px; text-align: center; width: 100%;">
+        <h3 id="call-status">Anruf läuft...</h3><br>
+        <button onclick="endCall()" style="background:#ea4335; border:none; padding:18px; border-radius:50%; cursor:pointer; font-size:24px; color:white;">📞</button>
+    </div>
+</div>
+
+<input type="file" id="pic-upload" style="display:none" onchange="uploadPic()">
+<input type="file" id="file-input" style="display:none" onchange="uploadFile()">
+
+<div id="app">
+    <div id="sidebar">
+        <div class="side-header">
+            <div class="avatar" id="my-avatar" onclick="document.getElementById('pic-upload').click()">?</div>
+            <div style="flex:1"><b id="my-name"></b><br><small id="my-num"></small></div>
+            <button onclick="downloadBackup()" title="Backup" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right: 10px;">💾</button>
+            <button onclick="showLinkCode()" title="Link Code" style="background:none; border:none; cursor:pointer; font-size:20px;">🔑</button>
+        </div>
+        <div class="contact-list" id="contact-list"></div>
+        <button class="btn-main" style="border-radius:0" onclick="manualAddPrompt()">+ Kontakt hinzufügen</button>
+    </div>
+    
+    <div id="chat-window">
+        <div class="chat-header">
+            <div class="avatar" id="chat-avatar">?</div>
+            <div style="flex:1"><b id="chat-title"></b></div>
+            <button onclick="confirmCall('audio')" style="background:none; border:none; cursor:pointer; font-size:20px; margin-right:15px;">📞</button>
+            <button onclick="confirmCall('video')" style="background:none; border:none; cursor:pointer; font-size:20px;">📹</button>
+        </div>
+        <div id="messages"></div>
+        <div class="input-area">
+            <button onclick="document.getElementById('file-input').click()" style="background:none; border:none; font-size:22px; cursor:pointer;">📎</button>
+            <input type="text" id="msgIn" placeholder="Nachricht..." onkeypress="if(event.key==='Enter') send()">
+            <button id="mic-btn" class="record-btn" onmousedown="startRec()" onmouseup="stopRec()" ontouchstart="startRec()" ontouchend="stopRec()">🎤</button>
+            <button onclick="send()" style="background:var(--wa-green); border:none; color:white; width:42px; height:42px; border-radius:50%; cursor:pointer;">➤</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let myNum = "", activeChat = "", ws = null;
+    let contacts = {}, history = {}, contactPics = {}, usageInterval;
+    let pc, localStream, mediaRec, audioChunks = [], selectedMsgId = null;
+
+    // --- HELPER ---
+    function showToast(m) { let t=document.getElementById("toast"); t.innerText=m; t.style.display="block"; setTimeout(()=>t.style.display="none", 3000); }
+    function closePop() { document.getElementById("custom-popup").style.display="none"; }
+    function showPop(title, text, onConfirm, confirmText="Bestätigen") {
+        document.getElementById("pop-title").innerText = title;
+        document.getElementById("pop-text").innerText = text;
+        document.getElementById("pop-confirm").innerText = confirmText;
+        document.getElementById("custom-popup").style.display = "flex";
+        document.getElementById("pop-confirm").onclick = () => { closePop(); if(onConfirm) onConfirm(); };
+    }
+    function hideMenu() { document.getElementById("msg-menu").style.display = "none"; }
+    function getT() {
+        let t = localStorage.getItem("pi_t");
+        if(!t) { t = 'HW-' + Math.random().toString(36).substr(2,9); localStorage.setItem("pi_t", t); }
+        return t;
+    }
+
+    // --- AUTH & SETUP ---
+    async function auth(type) {
+        let u = document.getElementById("u").value, p = document.getElementById("p").value;
+        if(!u || !p) return showToast("Bitte Daten eingeben");
+        let res = await fetch("/auth", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username:u, password:p, type:type, token:getT()})});
+        let data = await res.json();
+        if(data.status === "success") {
+            myNum = data.phone; contacts = data.contacts; history = data.history; contactPics = data.contact_pics;
+            document.getElementById("auth").style.display="none"; document.getElementById("app").style.display="flex";
+            document.getElementById("my-name").innerText = u; document.getElementById("my-num").innerText = myNum;
+            if(data.pic) setAvatar("my-avatar", data.pic);
+            renderList(); connect();
+        } else if(data.status === "unauthorized") {
+            let c = prompt("Verknüpfungscode erforderlich (von anderem Gerät):");
+            if(c) {
+                let r = await fetch("/link_device", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username:u, code:c, token:getT()})});
+                let rd = await r.json(); showToast(rd.msg || "Verknüpft! Login erneut versuchen.");
+            }
+        } else showToast(data.msg);
+    }
+
+    async function showLinkCode() {
+        let u = document.getElementById("my-name").innerText;
+        let res = await fetch("/generate_link_code", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({username:u})});
+        let d = await res.json();
+        if(d.code) showPop("Link-Code", `Dein Code für neue Geräte: ${d.code}`, null, "OK");
+    }
+
+    // --- WEBSOCKET ---
+    function connect() {
+        ws = new WebSocket(`ws://${location.host}/ws/${myNum}`);
+        ws.onmessage = async (e) => {
+            let d = JSON.parse(e.data);
+            
+            if(d.type === "edit_event") {
+                if(history[d.from]) {
+                    let m = history[d.from].find(msg => msg.id == d.id);
+                    if(m) m.text = d.new_text;
+                }
+                if(activeChat === d.from) {
+                    let el = document.getElementById("msg-" + d.id);
+                    if(el) updateBubbleDOM(el, d.new_text, 'theirs', 'delivered');
+                }
+                return;
+            }
+
+            if(d.type === "delete_event") {
+                history[d.from] = (history[d.from] || []).filter(m => m.id != d.id);
+                if(activeChat === d.from) {
+                    let el = document.getElementById("msg-" + d.id);
+                    if(el) { el.style.opacity = "0"; setTimeout(() => el.remove(), 250); }
+                }
+                return;
+            }
+
+            if(d.type === "read_event") { if(history[d.from]) history[d.from].forEach(m => m.status = "read"); if(activeChat === d.from) loadHistory(d.from); return; }
+            if(d.type === "call-offer") handleOffer(d);
+            if(d.type === "call-answer") await pc.setRemoteDescription(new RTCSessionDescription(d.answer));
+            if(d.type === "call-candidate") await pc.addIceCandidate(new RTCIceCandidate(d.candidate));
+            if(d.type === "call-end") endCall(false);
+
+            if(d.type === "chat") {
+                if(!history[d.from]) history[d.from] = [];
+                let msgObj = {sender:d.from, text:d.msg, status:"delivered", id: d.id || Date.now()};
+                history[d.from].push(msgObj);
+                if(activeChat === d.from) { 
+                    showMsg(d.msg, 'theirs', 'delivered', msgObj.id); 
+                    fetch("/set_read", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({me:myNum, partner:d.from})}); 
+                    ws.send(JSON.stringify({type:"read_event", to:d.from, from:myNum})); 
+                }
+                renderList();
+            }
+        };
+    }
+
+    // --- MESSAGES ---
+    function showMsg(t, c, status, msgId) {
+        let d = document.createElement("div"); 
+        d.className = "bubble " + c;
+        if(msgId) d.id = "msg-" + msgId;
+        
+        if(c === 'mine') {
+            d.oncontextmenu = (e) => {
+                e.preventDefault(); e.stopPropagation();
+                selectedMsgId = msgId;
+                let menu = document.getElementById("msg-menu");
+                menu.style.display = "flex"; menu.style.left = e.pageX + "px"; menu.style.top = e.pageY + "px";
+            };
+        }
+
+        updateBubbleDOM(d, t, c, status);
+        let m = document.getElementById("messages"); 
+        m.appendChild(d); 
+        m.scrollTop = m.scrollHeight;
+    }
+
+    function updateBubbleDOM(element, text, side, status) {
+        let content = "";
+        try {
+            let o = JSON.parse(text);
+            if(o.type === "file") {
+                if(o.mime.startsWith("image")) content = `<img src="${o.url}" onclick="openLB('${o.url}','${o.mime}')">`;
+                else if(o.mime.startsWith("video")) content = `<video src="${o.url}" onclick="openLB('${o.url}','${o.mime}')"></video>`;
+                else if(o.mime.startsWith("audio")) content = `<audio src="${o.url}" controls style="width:220px;"></audio>`;
+                else content = `<a href="${o.url}" target="_blank" style="color:var(--wa-green)">📄 ${o.name}</a>`;
+                content += `<br><a href="${o.url}" download="${o.name}" class="dl-link">💾 Speichern</a>`;
+            } else content = `<span>${text}</span>`;
+        } catch(e) { content = `<span>${text}</span>`; }
+        
+        let ticks = side === 'mine' ? `<span class="ticks ${status==='read'?'read':''}">✔✔</span>` : '';
+        element.innerHTML = content + ticks;
+    }
+
+    async function send() { let m = document.getElementById("msgIn").value; if(m) { sendRaw(m); document.getElementById("msgIn").value = ""; } }
+
+    async function sendRaw(m) {
+        if(!activeChat) return;
+        let mid = Date.now();
+        ws.send(JSON.stringify({type:"chat", from:myNum, to:activeChat, msg:m, id: mid}));
+        if(!history[activeChat]) history[activeChat] = [];
+        history[activeChat].push({sender:myNum, text:m, status:"delivered", id: mid});
+        showMsg(m, 'mine', 'delivered', mid);
+        fetch("/save_msg", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({from:myNum, to:activeChat, msg:m})});
+        renderList();
+    }
+
+    // --- ACTIONS ---
+    async function editMsgAction() {
+        let n = prompt("Nachricht bearbeiten:");
+        if(!n || !selectedMsgId) return;
+        ws.send(JSON.stringify({type:"edit_msg", to:activeChat, from:myNum, id:selectedMsgId, new_text:n}));
+        let el = document.getElementById("msg-" + selectedMsgId);
+        if(el) updateBubbleDOM(el, n, 'mine', 'delivered');
+        fetch("/edit_msg", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({me:myNum, partner:activeChat, id:selectedMsgId, text:n})});
+        let msgObj = (history[activeChat] || []).find(m => m.id == selectedMsgId);
+        if(msgObj) msgObj.text = n;
+        hideMenu();
+    }
+
+    async function deleteMsgAction() {
+        if(!selectedMsgId) return;
+        showPop("Löschen", "Nachricht für alle löschen?", async () => {
+            ws.send(JSON.stringify({type:"delete_msg", to:activeChat, from:myNum, id:selectedMsgId}));
+            let el = document.getElementById("msg-" + selectedMsgId);
+            if(el) { el.style.opacity = "0"; setTimeout(() => el.remove(), 250); }
+            fetch("/delete_msg", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({me:myNum, partner:activeChat, id:selectedMsgId})});
+            history[activeChat] = (history[activeChat] || []).filter(m => m.id != selectedMsgId);
+        });
+        hideMenu();
+    }
+
+    // --- CALLS ---
+    function confirmCall(type) { showPop("Anruf", `Möchtest du ${contacts[activeChat]} anrufen?`, () => startCall(type), "Anrufen"); }
+    async function startCall(type) {
+        document.getElementById("call-overlay").style.display = "flex";
+        try {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: type === 'video' });
+            document.getElementById("local-video").srcObject = localStream;
+            pc = new RTCPeerConnection();
+            localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+            pc.onicecandidate = e => e.candidate && ws.send(JSON.stringify({type:"call-candidate", to:activeChat, candidate:e.candidate}));
+            pc.ontrack = e => document.getElementById("remote-video").srcObject = e.streams[0];
+            let offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            ws.send(JSON.stringify({type:"call-offer", from:myNum, to:activeChat, offer:offer, callType:type}));
+        } catch(e) { showToast("Hardware-Zugriff verweigert!"); endCall(); }
+    }
+    async function handleOffer(d) {
+        showPop("Anruf", `Anruf von ${contacts[d.from] || d.from}`, async () => {
+            document.getElementById("call-overlay").style.display = "flex";
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: d.callType === 'video' });
+            document.getElementById("local-video").srcObject = localStream;
+            pc = new RTCPeerConnection();
+            localStream.getTracks().forEach(t => pc.addTrack(t, localStream));
+            pc.onicecandidate = e => e.candidate && ws.send(JSON.stringify({type:"call-candidate", to:d.from, candidate:e.candidate}));
+            pc.ontrack = e => document.getElementById("remote-video").srcObject = e.streams[0];
+            await pc.setRemoteDescription(new RTCSessionDescription(d.offer));
+            let answer = await pc.createAnswer();
+            await pc.setLocalDescription(answer);
+            ws.send(JSON.stringify({type:"call-answer", to:d.from, answer:answer}));
+        }, "Annehmen");
+    }
+    function endCall(notify = true) {
+        if(notify && activeChat) ws.send(JSON.stringify({type:"call-end", to:activeChat}));
+        if(localStream) localStream.getTracks().forEach(t => t.stop());
+        if(pc) pc.close();
+        document.getElementById("call-overlay").style.display = "none";
+    }
+
+    // --- MEDIA ---
+    async function startRec() {
+        audioChunks = [];
+        try {
+            let s = await navigator.mediaDevices.getUserMedia({ audio: true });
+            mediaRec = new MediaRecorder(s);
+            document.getElementById("mic-btn").classList.add("recording");
+            mediaRec.ondataavailable = e => audioChunks.push(e.data);
+            mediaRec.start();
+        } catch(e) { showToast("Mikrofon blockiert!"); }
+    }
+    function stopRec() {
+        if(!mediaRec) return;
+        mediaRec.stop();
+        document.getElementById("mic-btn").classList.remove("recording");
+        mediaRec.onstop = async () => {
+            let blob = new Blob(audioChunks, { type: 'audio/webm' });
+            if(blob.size > 2000) uploadFileManual(new File([blob], "voice.webm", {type:"audio/webm"}));
+        };
+    }
+    async function uploadFileManual(f) {
+        let fd = new FormData(); fd.append("file", f); fd.append("sender", myNum); fd.append("target", activeChat);
+        let res = await fetch("/upload", {method:"POST", body:fd});
+        let d = await res.json();
+        sendRaw(JSON.stringify({type:"file", url:d.url, name:d.name, mime:d.mime}));
+    }
+    function uploadFile() { let f = document.getElementById("file-input").files[0]; if(f) uploadFileManual(f); }
+    function openLB(url, mime) {
+        let content = document.getElementById("lb-content");
+        content.innerHTML = mime.startsWith("image") ? `<img src="${url}">` : `<video src="${url}" controls autoplay></video>`;
+        document.getElementById("lightbox").style.display = "flex";
+    }
+
+    // --- UI ---
+    function renderList() {
+        let l = document.getElementById("contact-list"); l.innerHTML = "";
+        Object.keys(contacts).forEach(n => {
+            let d = document.createElement("div"); d.className = "contact " + (activeChat === n ? "active" : "");
+            let p = contactPics[n];
+            let last = history[n] ? history[n][history[n].length-1]?.text : "";
+            if(last && last.startsWith('{')) last = "📎 Datei";
+            d.innerHTML = `<div class="avatar">${p?`<img src="${p}">`:n[0]}</div><div style="flex:1"><b>${contacts[n]}</b><br><small style="color:#666">${last || n}</small></div>`;
+            d.onclick = () => openChat(n); l.appendChild(d);
+        });
+    }
+    function openChat(n) { activeChat = n; document.getElementById("chat-window").style.display="flex"; document.getElementById("chat-title").innerText = contacts[n]; loadHistory(n); }
+    function loadHistory(n) { document.getElementById("messages").innerHTML = ""; (history[n] || []).forEach(m => showMsg(m.text, m.sender === myNum ? 'mine' : 'theirs', m.status, m.id)); }
+    function manualAddPrompt() {
+        let n = prompt("Nummer:"), nm = prompt("Name:");
+        if(n && nm) fetch("/save_contact", {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({me:myNum, num:n, name:nm})})
+            .then(r => r.json()).then(d => { if(d.status === "success") { contacts[n] = nm; renderList(); } else showToast(d.msg); });
+    }
+    function setAvatar(id, src) { document.getElementById(id).innerHTML = `<img src="${src}">`; }
+    async function downloadBackup() {
+        let res = await fetch(`/export_backup/${myNum}`);
+        let data = await res.json();
+        let blob = new Blob([JSON.stringify(data, null, 2)], {type:"application/json"});
+        let a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = `backup_${myNum}.json`; a.click();
+    }
+</script>
+</body>
+</html>
